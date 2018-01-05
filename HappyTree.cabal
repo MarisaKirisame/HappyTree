@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: eb645e7d00ee859300b697e70d879fdf741cf9f06732dd9e7e3b9535418605e5
+-- hash: f3905082ad644ffa2693f701f78d8c3f8aff15600cc4ddf707843dc7278a83c2
 
 name:           HappyTree
 version:        0.1.0.0
@@ -30,6 +30,7 @@ library
       src
   build-depends:
       base >=4.7 && <5
+    , constraints ==0.9.1
     , generics-sop ==0.3.1.0
     , singletons ==2.3.1
   exposed-modules:
@@ -46,6 +47,7 @@ executable HappyTree-exe
   build-depends:
       HappyTree
     , base >=4.7 && <5
+    , constraints ==0.9.1
     , generics-sop ==0.3.1.0
     , singletons ==2.3.1
   other-modules:
@@ -61,6 +63,7 @@ test-suite HappyTree-test
   build-depends:
       HappyTree
     , base >=4.7 && <5
+    , constraints ==0.9.1
     , generics-sop ==0.3.1.0
     , singletons ==2.3.1
   other-modules:

@@ -23,6 +23,7 @@ dependencies:
 - base >= 4.7 && < 5
 - singletons == 2.3.1
 - generics-sop == 0.3.1.0
+- constraints == 0.9.1
 
 library:
   source-dirs: src
