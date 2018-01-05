@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0bc6410ca1444e7c0649d140209af24abdb629e5327e030036b9fa5d9373ca4c
+-- hash: ca077430f4b90fc7a4a71fa0738c6711a609f4b20ff2f746b4e91c7aa4cc897c
 
 name:           HappyTree
-version:        0.1.0.0
+version:        0.2018.1.5
 description:    Please see the README on Github at <https://github.com/MarisaKirisame/HappyTree#readme>
 homepage:       https://github.com/MarisaKirisame/HappyTree#readme
 bug-reports:    https://github.com/MarisaKirisame/HappyTree/issues
