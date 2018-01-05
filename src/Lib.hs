@@ -44,31 +44,22 @@ class (SplitCode a ~ SOP.Code a, SOP.Generic a) => SplitStructure a where
 
 class Ord a => SplitOrd a
 
-type family SplitStructureOnAux (dt :: [*] -> * -> *) (b :: *) (r :: [*]) (a :: [*]) :: *
-type instance SplitStructureOnAux dt b r a = dt (r :++ a) b
-newtype SplitStructureOnAuxT dt b r a = SplitStructureOnAuxT { runSplitStructureOnAuxT :: dt (r :++ a) b }
-$(genDefunSymbols [''SplitStructureOnAux])
+newtype SplitStructureOnAux dt b r a = SplitStructureOnAux { runSplitStructureOnAux :: dt (r :++ a) b }
 
-type family SplitStructureOn (dt :: [*] -> * -> *) (b :: *) (a :: (*, [*])) :: *
-type instance SplitStructureOn dt b '(l, r) = (Dict (SplitStructure l), SOP.NP SOP.I (Map (SplitStructureOnAuxSym3 dt b r) (SplitCode l)))
-newtype SplitStructureOnT dt b a =
-  SplitStructureOnT { runSplitStructureOnT :: (Dict (SplitStructure (Fst a)), SOP.NP (SplitStructureOnAuxT dt b (Snd a)) (SplitCode (Fst a))) }
+newtype SplitStructureOn dt b a =
+  SplitStructureOn { runSplitStructureOn :: (Dict (SplitStructure (Fst a)), SOP.NP (SplitStructureOnAux dt b (Snd a)) (SplitCode (Fst a))) }
 
-type family SplitOrderOn (dt :: [*] -> * -> *) (b :: *) (a :: (*, [*])) :: *
-type instance SplitOrderOn dt b '(l, r) = (Dict (SplitOrd l), l, dt (l:r) b, dt r b, dt (l:r) b)
-newtype SplitOrderOnT dt b a = SplitOrderOnT { runSplitOrderOnT :: SplitOrderOn dt b a }
+newtype SplitOrderOn dt b a = SplitOrderOn { runSplitOrderOn :: (Dict (SplitOrd (Fst a)), (Fst a), dt (Fst a:Snd a) b, dt (Snd a) b, dt (Fst a:Snd a) b) }
 
 data DecisionTree (a :: [*]) (b :: *) =
   Leaf (SOP.NP SOP.I a -> b) |
-  SplitOnStructure (SOP.NS (SplitStructureOnT DecisionTree b) (TakeElem a)) |
-  SplitOnOrd (SOP.NS (SplitOrderOnT DecisionTree b) (TakeElem a))
+  SplitOnStructure (SOP.NS (SplitStructureOn DecisionTree b) (TakeElem a)) |
+  SplitOnOrd (SOP.NS (SplitOrderOn DecisionTree b) (TakeElem a))
 
-type family TakeElemTypeAux (a :: (*, [*])) :: *
-type instance TakeElemTypeAux '(l, r) = (l, SOP.NP SOP.I r)
-newtype TakeElemTypeAuxT a = TakeElemTypeAuxT { runTakeElemTypeAuxT :: (Fst a, SOP.NP SOP.I (Snd a)) }
+newtype TakeElemTypeAux a = TakeElemTypeAux { runTakeElemTypeAux :: (Fst a, SOP.NP SOP.I (Snd a)) }
 
 type family TakeElemAuxType (a :: [*]) (b :: [*]) :: *
-type instance TakeElemAuxType a b = SOP.NP TakeElemTypeAuxT (TakeElemAux a b)
+type instance TakeElemAuxType a b = SOP.NP TakeElemTypeAux (TakeElemAux a b)
 
 type family TakeElemType (a :: [*]) :: *
 type instance TakeElemType a = TakeElemAuxType '[] a
@@ -79,7 +70,7 @@ revAppendDT (x SOP.:* y) z = revAppendDT y (x SOP.:* z)
 
 takeElemAuxDT :: SOP.NP SOP.I a -> SOP.NP SOP.I b -> TakeElemAuxType a b
 takeElemAuxDT _ SOP.Nil = SOP.Nil
-takeElemAuxDT x (SOP.I y SOP.:* z) = TakeElemTypeAuxT (y, revAppendDT x z) SOP.:* takeElemAuxDT (SOP.I y SOP.:* x) z
+takeElemAuxDT x (SOP.I y SOP.:* z) = TakeElemTypeAux (y, revAppendDT x z) SOP.:* takeElemAuxDT (SOP.I y SOP.:* x) z
 
 dictSList :: SOP.SList a -> Dict (SOP.SListI a)
 dictSList SOP.SNil = Dict
@@ -115,7 +106,14 @@ eval (Leaf f) x = f x
 eval (SplitOnStructure f) x =
   dictSList (takeElemAuxDTSing SOP.SNil (npToSList x)) `withDict`
   (SOP.hcollapse $ SOP.hzipWith
-    (\(TakeElemTypeAuxT (a, b)) (SplitStructureOnT (Dict, d)) ->
+    (\(TakeElemTypeAux (a, b)) (SplitStructureOn (Dict, d)) ->
       let SOP.SOP e = splitStructureFrom a in
-      SOP.K (SOP.hcollapse $ SOP.hzipWith (\(SplitStructureOnAuxT f) g -> SOP.K (eval f (sopAppend b g))) d e)) (takeElemDT x) f)
-eval (SplitOnOrd f) x = undefined
+      SOP.K (SOP.hcollapse $ SOP.hzipWith (\(SplitStructureOnAux f) g -> SOP.K (eval f (sopAppend b g))) d e)) (takeElemDT x) f)
+eval (SplitOnOrd f) x =
+  dictSList (takeElemAuxDTSing SOP.SNil (npToSList x)) `withDict`
+  (SOP.hcollapse $ SOP.hzipWith
+    (\(TakeElemTypeAux (a, b)) (SplitOrderOn (Dict, d, e, f, g)) ->
+      SOP.K (case a `compare` d of
+               LT -> eval e (SOP.I a SOP.:* b)
+               EQ -> eval f b
+               GT -> eval g (SOP.I a SOP.:* b))) (takeElemDT x) f)
