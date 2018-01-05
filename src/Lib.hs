@@ -24,11 +24,14 @@ someFunc :: IO ()
 someFunc = putStrLn "someFunc"
 
 $(singletons [d|
-  secondCons :: a -> (a, [a]) -> (a, [a])
-  secondCons x (l, r) = (l, x:r)
+  revAppend :: [a] -> [a] -> [a]
+  revAppend [] x = x
+  revAppend (x:xs) n = revAppend xs (x:n) 
+  takeElemAux :: [a] -> [a] -> [(a, [a])]
+  takeElemAux l [] = []
+  takeElemAux l (r:rs) = (r, revAppend l rs) : takeElemAux (r:l) rs 
   takeElem :: [a] -> [(a, [a])]
-  takeElem [] = []
-  takeElem (x:xs) = (x, xs) : map (secondCons x) (takeElem xs)
+  takeElem = takeElemAux []
  |])
 
 class SOP.Generic a => SplitStructure a where
@@ -60,36 +63,26 @@ type instance TakeElemTypeAux '(l, r) = (l, SOP.NP SOP.I r)
 
 $(genDefunSymbols [''TakeElemTypeAux])
 
+type family TakeElemAuxType (a :: [*]) (b :: [*]) :: *
+type instance TakeElemAuxType a b = SOP.NP SOP.I (Map TakeElemTypeAuxSym0 (TakeElemAux a b))
+
 type family TakeElemType (a :: [*]) :: *
-type instance TakeElemType a = SOP.NP SOP.I (Map TakeElemTypeAuxSym0 (TakeElem a))
+type instance TakeElemType a = TakeElemAuxType '[] a
 
-data TakeElemDTAuxSing (a :: [(*, [*])]) where
-  STENil :: TakeElemDTAuxSing '[]
-  STECons :: Proxy l -> Proxy r -> TakeElemDTAuxSing s -> TakeElemDTAuxSing ('(l, r):s)
+revAppendDT :: SOP.NP SOP.I a -> SOP.NP SOP.I b -> SOP.NP SOP.I (RevAppend a b)
+revAppendDT SOP.Nil x = x
+revAppendDT (x SOP.:* y) z = revAppendDT y (x SOP.:* z)
 
-takeElemDTAux :: x -> TakeElemDTAuxSing a -> SOP.NP SOP.I (Map TakeElemTypeAuxSym0 a) -> SOP.NP SOP.I (Map TakeElemTypeAuxSym0 (Map (SecondConsSym1 x) a))
-takeElemDTAux _ STENil SOP.Nil = SOP.Nil
-takeElemDTAux x (STECons _ _ stes) (SOP.I (ll, lr) SOP.:* r) = SOP.I (ll, SOP.I x SOP.:* lr) SOP.:* takeElemDTAux x stes r
+takeElemAuxDT :: SOP.NP SOP.I a -> SOP.NP SOP.I b -> TakeElemAuxType a b
+takeElemAuxDT _ SOP.Nil = SOP.Nil
+takeElemAuxDT x (SOP.I y SOP.:* z) = SOP.I (y, revAppendDT x z) SOP.:* takeElemAuxDT (SOP.I y SOP.:* x) z
+
+takeElemDT :: SOP.NP SOP.I a -> TakeElemType a
+takeElemDT = takeElemAuxDT SOP.Nil
 
 evalStructure = undefined
 
-takeElemDT :: SOP.NP SOP.I a -> TakeElemType a
-takeElemDT SOP.Nil = SOP.Nil
-takeElemDT (SOP.I (x :: x) SOP.:* (xs :: SOP.NP SOP.I xs)) = SOP.I (x, xs) SOP.:* takeElemDTAux x (undefined :: TakeElemDTAuxSing (TakeElem xs)) (takeElemDT xs)
-
-unSCons :: SOP.SList (l:r) -> SOP.SList r
-unSCons SOP.SCons = SOP.sList
-
-sListToSTE :: SOP.SList a -> TakeElemDTAuxSing (TakeElem a)
-sListToSTE SOP.SNil = STENil
-sListToSTE sl@SOP.SCons = STECons Proxy Proxy (sListToSTE (unSCons sl))
-
-takeElemDTSing :: SOP.SList a -> SOP.NP SOP.I a -> TakeElemType a
-takeElemDTSing _ SOP.Nil = SOP.Nil
-takeElemDTSing sl@SOP.SCons (SOP.I x SOP.:* (xs :: SOP.NP SOP.I xs)) =
-  SOP.I (x, xs) SOP.:* takeElemDTAux x (sListToSTE (unSCons sl)) (takeElemDTSing SOP.sList xs)
-
 eval :: DecisionTree a b -> SOP.NP SOP.I a -> b
 eval (Leaf f) x = f x
-eval (SplitOnStructure f) x = evalStructure f $ takeElemDT x
+eval (SplitOnStructure f) x = _ f $ takeElemDT x
 eval (SplitOnOrd f) x = undefined
