@@ -28,26 +28,33 @@ $(singletons [d|
   revAppend :: [a] -> [a] -> [a]
   revAppend [] x = x
   revAppend (x:xs) n = revAppend xs (x:n) 
-  takeElemAux :: [a] -> [a] -> [(a, [a])]
-  takeElemAux l [] = []
-  takeElemAux l (r:rs) = (r, revAppend l rs) : takeElemAux (r:l) rs 
-  takeElem :: [a] -> [(a, [a])]
-  takeElem = takeElemAux []
+  selElemAux :: [a] -> [a] -> [(a, [a])]
+  selElemAux l [] = []
+  selElemAux l (r:rs) = (r, revAppend l rs) : selElemAux (r:l) rs 
+  selElem :: [a] -> [(a, [a])]
+  selElem = selElemAux []
  |])
 
-newtype TakeElemTypeAux a = TakeElemTypeAux { runTakeElemTypeAux :: (Fst a, SOP.NP SOP.I (Snd a)) }
-type TakeElemAuxType a b = SOP.NP TakeElemTypeAux (TakeElemAux a b)
-type TakeElemType a = TakeElemAuxType '[] a
+takeElemAux :: [a] -> [a] -> [([a], a, [a])]
+takeElemAux l [] = []
+takeElemAux l (r:rs) = (reverse l, r, rs) : takeElemAux (r:l) rs
+
+takeElem :: [a] -> [([a], a, [a])]
+takeElem = takeElemAux []
+
+newtype SelElemTypeAux a = SelElemTypeAux { runTakeElemTypeAux :: (Fst a, SOP.NP SOP.I (Snd a)) }
+type SelElemAuxType a b = SOP.NP SelElemTypeAux (SelElemAux a b)
+type SelElemType a = SelElemAuxType '[] a
 
 npRevAppend :: SOP.NP f a -> SOP.NP f b -> SOP.NP f (RevAppend a b)
 npRevAppend SOP.Nil x = x
 npRevAppend (x SOP.:* y) z = npRevAppend y (x SOP.:* z)
 
-npTakeElemAux :: SOP.NP SOP.I a -> SOP.NP SOP.I b -> TakeElemAuxType a b
-npTakeElemAux _ SOP.Nil = SOP.Nil
-npTakeElemAux x (SOP.I y SOP.:* z) = TakeElemTypeAux (y, npRevAppend x z) SOP.:* npTakeElemAux (SOP.I y SOP.:* x) z
-npTakeElem :: SOP.NP SOP.I a -> TakeElemAuxType '[] a
-npTakeElem = npTakeElemAux SOP.Nil
+npSelElemAux :: SOP.NP SOP.I a -> SOP.NP SOP.I b -> SelElemAuxType a b
+npSelElemAux _ SOP.Nil = SOP.Nil
+npSelElemAux x (SOP.I y SOP.:* z) = SelElemTypeAux (y, npRevAppend x z) SOP.:* npSelElemAux (SOP.I y SOP.:* x) z
+npSelElem :: SOP.NP SOP.I a -> SelElemAuxType '[] a
+npSelElem = npSelElemAux SOP.Nil
 
 dictSList :: SOP.SList a -> Dict (SOP.SListI a)
 dictSList SOP.SNil = Dict
@@ -69,15 +76,15 @@ newtype SplitOnAux a b c = SplitOnAux { runSplitOnAux :: DecisionTree (c :++ a) 
 data SplitOn (b :: *) (x :: (*, [*])) =
   forall (c :: [[*]]) . SOP.SListI c => SplitOn (Fst x -> SOP.SOP SOP.I c) (SOP.NP (SplitOnAux (Snd x) b) c)
 
-data DecisionTree (a :: [*]) (b :: *) = Leaf (SOP.NP SOP.I a -> b) | Split (SOP.NS (SplitOn b) (TakeElem a))
+data DecisionTree (a :: [*]) (b :: *) = Leaf (SOP.NP SOP.I a -> b) | Split (SOP.NS (SplitOn b) (SelElem a))
 
 eval :: DecisionTree a b -> SOP.NP SOP.I a -> b
 eval (Leaf f) x = f x
-eval (Split f) x = dictSList (npToSList tex) `withDict` SOP.hcollapse (SOP.hzipWith onTree tex f)
+eval (Split f) x = dictSList (npToSList sex) `withDict` SOP.hcollapse (SOP.hzipWith onTree sex f)
   where
-    tex = npTakeElem x
-    onTree :: TakeElemTypeAux c -> SplitOn b c -> SOP.K b _
-    onTree (TakeElemTypeAux (a, b)) (SplitOn c d) = 
+    sex = npSelElem x
+    onTree :: SelElemTypeAux c -> SplitOn b c -> SOP.K b _
+    onTree (SelElemTypeAux (a, b)) (SplitOn c d) = 
       let SOP.SOP e = c a in SOP.K $
         SOP.hcollapse $ SOP.hzipWith (\(SplitOnAux f) g -> SOP.K $ eval f (npAppend g b)) d e
 
@@ -98,23 +105,40 @@ instance {-# OVERLAPPABLE #-} GetIndex r x => GetIndex (l:r) x where
 instance {-# OVERLAPPING #-} GetIndex (l:r) l where
   getIndex _ _ = Index $ SOP.Z IndexAux
 
-newtype SplitFunAux b d = SplitFunAux { runSplitFunAux :: [(SOP.NP SOP.I d, b)] }
-data SplitFun (env :: [*]) a =
-  forall (c :: [[[*]]]) . SplitFun (SOP.POP (SOP.NP (Index env)) c) (a -> SOP.NP (SOP.SOP SOP.I) c) (forall b . [(a, b)] -> SOP.POP (SplitFunAux b) c)
+newtype SplitFunAuxAux b d = SplitFunAuxAux { runSplitFunAuxAux :: [(SOP.NP SOP.I d, b)] }
+data SplitFunAux env a b = forall (c :: [[*]]) . SOP.SListI2 c => SplitFunAux (SOP.POP (Index env) c) (a -> SOP.SOP SOP.I c) (SOP.NP (SplitFunAuxAux b) c)
+splitFunAuxP :: SOP.SListI2 c => Proxy c -> SOP.POP (Index env) c -> (a -> SOP.SOP SOP.I c) -> SOP.NP (SplitFunAuxAux b) c -> SplitFunAux env a b
+splitFunAuxP _ = SplitFunAux
+
+data SplitFun (env :: [*]) a = SplitFun (forall b . [(a, b)] -> [SplitFunAux env a b])
 type SplitFuns cur env = SOP.NP (SplitFun env) cur
 
-noSplit :: SplitFun env a
-noSplit = SplitFun (SOP.POP SOP.Nil) (const SOP.Nil) (const $ SOP.POP SOP.Nil)
+instance Monoid (SplitFun env a) where
+  mempty = SplitFun (const [])
+  SplitFun l `mappend` SplitFun r = SplitFun (\b -> l b ++ r b)
 
-fullSplit :: SOP.SListI2 c => (SOP.POP (SOP.NP (Index env)) c) -> (a -> SOP.NP (SOP.SOP SOP.I) c) -> SplitFun env a
-fullSplit index split =
-  SplitFun index split (\x -> SOP.POP $
-    foldl joinPP defPP $ map (\(a, b) -> SOP.hcmap (Proxy :: Proxy SOP.SListI) (\(SOP.SOP y) -> SOP.hexpand (SplitFunAux []) $ SOP.hmap (\z -> SplitFunAux [(z, b)]) y) $ split a) x)
+splitStatic :: SOP.SListI2 c => (SOP.POP (Index env) c) -> (a -> SOP.SOP SOP.I c) -> SplitFun env a
+splitStatic index split = SplitFun $ \x ->
+  [SplitFunAux index split (foldl join def $ map (\(a, b) -> SOP.hexpand (SplitFunAuxAux []) $ SOP.hmap (\c -> SplitFunAuxAux [(c, b)]) $ SOP.unSOP $ split a) x)]
   where
-    joinPP :: SOP.SListI2 c =>  SOP.NP (SOP.NP (SplitFunAux b)) c -> SOP.NP (SOP.NP (SplitFunAux b)) c -> SOP.NP (SOP.NP (SplitFunAux b)) c
-    joinPP = SOP.hczipWith (Proxy :: Proxy SOP.SListI) (SOP.hzipWith (\(SplitFunAux l) (SplitFunAux r) -> SplitFunAux $ l ++ r))
-    defPP :: SOP.SListI2 c => SOP.NP (SOP.NP (SplitFunAux b)) c
-    defPP = SOP.hcpure (Proxy :: Proxy SOP.SListI) (SOP.hpure $ SplitFunAux [])
+    join :: SOP.SListI2 c => SOP.NP (SplitFunAuxAux b) c -> SOP.NP (SplitFunAuxAux b) c -> SOP.NP (SplitFunAuxAux b) c
+    join = SOP.hzipWith (\(SplitFunAuxAux l) (SplitFunAuxAux r) -> SplitFunAuxAux $ l ++ r)
+    def :: SOP.SListI2 c => SOP.NP (SplitFunAuxAux b) c
+    def = SOP.hpure $ SplitFunAuxAux []
+
+splitOrd :: (Ord a, GetIndex env a) => SplitFun env a
+splitOrd = SplitFun $
+  map (\(x, y, z) -> splitFunAuxP (Proxy :: Proxy ['[a], '[], '[a]])
+    (SOP.POP (i SOP.:* SOP.Nil SOP.:* i SOP.:* SOP.Nil))
+    (\a -> SOP.SOP $ case a `compare` fst (head y) of
+      LT -> SOP.Z $ SOP.I a SOP.:* SOP.Nil
+      EQ -> SOP.S $ SOP.Z SOP.Nil
+      GT -> SOP.S $ SOP.S $ SOP.Z $ SOP.I a SOP.:* SOP.Nil)
+    (SplitFunAuxAux (map func $ concat x) SOP.:* SplitFunAuxAux (map (\(_, a) -> (SOP.Nil, a)) y) SOP.:* SplitFunAuxAux (map func $ concat z) SOP.:* SOP.Nil)) .
+  takeElem . groupBy (\(l, _) (r, _) -> l == r) . sortBy (\(l, _) (r, _) -> l `compare` r)
+  where
+    func (a, b) = (SOP.I a SOP.:* SOP.Nil, b)
+    i = getIndex Proxy Proxy SOP.:* SOP.Nil
 
 build :: Ord b => SplitFuns env env -> [(SOP.NP SOP.I a, b)] -> DecisionTree a b
 build = undefined
