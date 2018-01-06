@@ -10,7 +10,10 @@
   UndecidableSuperClasses,
   GADTs,
   PartialTypeSignatures,
-  RankNTypes
+  RankNTypes,
+  FlexibleInstances,
+  MultiParamTypeClasses,
+  FlexibleContexts
 #-}
 
 module Lib where
@@ -86,11 +89,32 @@ entropy x = sum $ map (\y -> let py = fromIntegral (length y) / lenx in -py * lo
 data IndexAux (l :: k) (r :: k) = l ~ r => IndexAux
 newtype Index (l :: [k]) (x :: k) = Index { runIndex :: SOP.NS (IndexAux x) l }
 
-data SplitFunAux b d = SplitFunAux (SOP.NP SOP.I d) b
-data SplitFun a (env :: [*]) =
-  forall (c :: [[[*]]]) . SplitFun (SOP.POP (SOP.NP (Index env)) c) (a -> SOP.NP (SOP.SOP SOP.I) c) (forall b . [(a, b)] -> SOP.POP (SplitFunAux b) c)
---data SplitFun a (env :: [*]) =
---  forall (c :: [[*]]) . SplitFun (SOP.POP (Index env) c) (a -> SOP.SOP SOP.I c) (forall b . [(a, b)] -> SOP.NP (SplitFunAux b) c)
+class GetIndex l x where
+  getIndex :: Proxy l -> Proxy x -> Index l x
 
-build :: DecisionTree a b
+instance {-# OVERLAPPABLE #-} GetIndex r x => GetIndex (l:r) x where
+  getIndex _ _ = Index $ SOP.S $ runIndex $ getIndex Proxy Proxy
+
+instance {-# OVERLAPPING #-} GetIndex (l:r) l where
+  getIndex _ _ = Index $ SOP.Z IndexAux
+
+newtype SplitFunAux b d = SplitFunAux { runSplitFunAux :: [(SOP.NP SOP.I d, b)] }
+data SplitFun (env :: [*]) a =
+  forall (c :: [[[*]]]) . SplitFun (SOP.POP (SOP.NP (Index env)) c) (a -> SOP.NP (SOP.SOP SOP.I) c) (forall b . [(a, b)] -> SOP.POP (SplitFunAux b) c)
+type SplitFuns cur env = SOP.NP (SplitFun env) cur
+
+noSplit :: SplitFun env a
+noSplit = SplitFun (SOP.POP SOP.Nil) (const SOP.Nil) (const $ SOP.POP SOP.Nil)
+
+fullSplit :: SOP.SListI2 c => (SOP.POP (SOP.NP (Index env)) c) -> (a -> SOP.NP (SOP.SOP SOP.I) c) -> SplitFun env a
+fullSplit index split =
+  SplitFun index split (\x -> SOP.POP $
+    foldl joinPP defPP $ map (\(a, b) -> SOP.hcmap (Proxy :: Proxy SOP.SListI) (\(SOP.SOP y) -> SOP.hexpand (SplitFunAux []) $ SOP.hmap (\z -> SplitFunAux [(z, b)]) y) $ split a) x)
+  where
+    joinPP :: SOP.SListI2 c =>  SOP.NP (SOP.NP (SplitFunAux b)) c -> SOP.NP (SOP.NP (SplitFunAux b)) c -> SOP.NP (SOP.NP (SplitFunAux b)) c
+    joinPP = SOP.hczipWith (Proxy :: Proxy SOP.SListI) (SOP.hzipWith (\(SplitFunAux l) (SplitFunAux r) -> SplitFunAux $ l ++ r))
+    defPP :: SOP.SListI2 c => SOP.NP (SOP.NP (SplitFunAux b)) c
+    defPP = SOP.hcpure (Proxy :: Proxy SOP.SListI) (SOP.hpure $ SplitFunAux [])
+
+build :: Ord b => SplitFuns env env -> [(SOP.NP SOP.I a, b)] -> DecisionTree a b
 build = undefined
