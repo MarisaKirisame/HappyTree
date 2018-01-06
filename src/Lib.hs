@@ -9,7 +9,8 @@
   TypeOperators,
   UndecidableSuperClasses,
   GADTs,
-  PartialTypeSignatures
+  PartialTypeSignatures,
+  RankNTypes
 #-}
 
 module Lib where
@@ -42,8 +43,7 @@ npRevAppend (x SOP.:* y) z = npRevAppend y (x SOP.:* z)
 npTakeElemAux :: SOP.NP SOP.I a -> SOP.NP SOP.I b -> TakeElemAuxType a b
 npTakeElemAux _ SOP.Nil = SOP.Nil
 npTakeElemAux x (SOP.I y SOP.:* z) = TakeElemTypeAux (y, npRevAppend x z) SOP.:* npTakeElemAux (SOP.I y SOP.:* x) z
-
-npTakeElem :: SOP.NP SOP.I a -> TakeElemType a
+npTakeElem :: SOP.NP SOP.I a -> TakeElemAuxType '[] a
 npTakeElem = npTakeElemAux SOP.Nil
 
 dictSList :: SOP.SList a -> Dict (SOP.SListI a)
@@ -66,9 +66,7 @@ newtype SplitOnAux a b c = SplitOnAux { runSplitOnAux :: DecisionTree (c :++ a) 
 data SplitOn (b :: *) (x :: (*, [*])) =
   forall (c :: [[*]]) . SOP.SListI c => SplitOn (Fst x -> SOP.SOP SOP.I c) (SOP.NP (SplitOnAux (Snd x) b) c)
 
-data DecisionTree (a :: [*]) (b :: *) =
-  Leaf (SOP.NP SOP.I a -> b) |
-  Split (SOP.NS (SplitOn b) (TakeElem a))
+data DecisionTree (a :: [*]) (b :: *) = Leaf (SOP.NP SOP.I a -> b) | Split (SOP.NS (SplitOn b) (TakeElem a))
 
 eval :: DecisionTree a b -> SOP.NP SOP.I a -> b
 eval (Leaf f) x = f x
@@ -84,3 +82,15 @@ entropy :: Ord a => [a] -> Double
 entropy x = sum $ map (\y -> let py = fromIntegral (length y) / lenx in -py * log py) $ group $ sort x
   where
     lenx = fromIntegral $ length x :: Double
+
+data IndexAux (l :: k) (r :: k) = l ~ r => IndexAux
+newtype Index (l :: [k]) (x :: k) = Index { runIndex :: SOP.NS (IndexAux x) l }
+
+data SplitFunAux b d = SplitFunAux (SOP.NP SOP.I d) b
+data SplitFun a (env :: [*]) =
+  forall (c :: [[[*]]]) . SplitFun (SOP.POP (SOP.NP (Index env)) c) (a -> SOP.NP (SOP.SOP SOP.I) c) (forall b . [(a, b)] -> SOP.POP (SplitFunAux b) c)
+--data SplitFun a (env :: [*]) =
+--  forall (c :: [[*]]) . SplitFun (SOP.POP (Index env) c) (a -> SOP.SOP SOP.I c) (forall b . [(a, b)] -> SOP.NP (SplitFunAux b) c)
+
+build :: DecisionTree a b
+build = undefined
