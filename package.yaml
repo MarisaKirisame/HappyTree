@@ -1,5 +1,5 @@
 name:                HappyTree
-version:             0.2018.1.5
+version:             0.2018.1.6
 github:              "MarisaKirisame/HappyTree"
 license:             BSD3
 author:              "Marisa Kirisame"
@@ -29,18 +29,6 @@ library:
   source-dirs: src
   ghc-options:
     - -Wno-partial-type-signatures
-
-executables:
-  HappyTree-exe:
-    main:                Main.hs
-    source-dirs:         app
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    - -Wno-partial-type-signatures
-    dependencies:
-    - HappyTree
 
 tests:
   HappyTree-test:

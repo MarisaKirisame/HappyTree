@@ -19,7 +19,7 @@ import Data.Void
 import Data.Singletons.TH
 import qualified Generics.SOP as SOP
 import Data.Constraint
-import Data.Proxy
+import Data.List
 
 someFunc :: IO ()
 someFunc = putStrLn "someFunc"
@@ -117,3 +117,8 @@ eval (SplitOnOrd f) x =
                LT -> eval e (SOP.I a SOP.:* b)
                EQ -> eval f b
                GT -> eval g (SOP.I a SOP.:* b))) (takeElemDT x) f)
+
+entropy :: Ord a => [a] -> Double
+entropy x = sum $ map (\y -> let py = fromIntegral (length y) / lenx in -py * log py) $ group $ sort x
+  where
+    lenx = fromIntegral $ length x :: Double
