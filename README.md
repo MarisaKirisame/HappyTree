@@ -12,6 +12,8 @@ Want to use different split strategy at the same time, splitting on the finest c
 
 ## Known Problem
 
+Tuple splitting is discourage since doing so will not decrease entropy by any mean.
+
 Can only split on finitely many type now. Cannot split on
 
-data Perfect a = Here a | More (Perfect (a, a))
+data Perfect a = Here a | More (Perfect (a, a)).
