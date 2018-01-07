@@ -16,7 +16,7 @@
   FlexibleContexts
 #-}
 
-module Lib where
+module Data.HappyTree where
 
 import Data.Singletons.Prelude
 import Data.Singletons.TH
