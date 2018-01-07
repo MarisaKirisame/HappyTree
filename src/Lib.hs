@@ -158,10 +158,6 @@ getIndex2 :: SOP.All (GetIndex l) r => SOP.SList r -> SOP.NP (Index l) r
 getIndex2 SOP.SNil = SOP.Nil
 getIndex2 SOP.SCons = getIndex Proxy Proxy SOP.:* getIndex2 SOP.sList
 
-newtype BuildAuxAux a b = BuildAuxAux { runBuildAuxAux :: [(a, Fst b, SOP.NP SOP.I (Snd b))] }
-
-newtype WithScore b x = WithScore { runWithScore :: (Double, (SplitOn b x)) }
-
 mode :: Ord a => [a] -> a
 mode = head . maximumBy (comparing length) . group . sort
 
@@ -187,13 +183,23 @@ selElemTypeAuxIndex x (y SOP.:* z) = SelElemTypeAuxIndex y (npRevAppend x z) SOP
 fromSFA :: SplitFunAux (env :: [*]) a b -> Proxy (SOP.All (GetIndex env))
 fromSFA _ = Proxy
 
-fromSF :: SplitFuns (env :: [*]) env -> Proxy (SOP.All (GetIndex env))
-fromSF _ = Proxy
+newtype BuildAuxAux a b = BuildAuxAux { runBuildAuxAux :: [(a, Fst b, SOP.NP SOP.I (Snd b))] }
+
+data Score = Destructing | Deciding Double deriving Eq
+instance Ord Score where
+  Destructing `compare` Destructing = EQ
+  Destructing `compare` _ = LT
+  _ `compare` Destructing = GT
+  Deciding l `compare` Deciding r = l `compare` r
+
+newtype WithScore b x = WithScore { runWithScore :: (Score, (SplitOn b x)) }
 
 buildTree :: (SOP.SListI env, Ord b) =>
-  SplitFuns env env -> SOP.NP (Index env) (Snd a1) -> b -> SplitFunAux env (Fst a1) (b, SOP.NP SOP.I (Snd a1)) -> (Double, SplitOn b a1)
+  SplitFuns env env -> SOP.NP (Index env) (Snd a1) -> b -> SplitFunAux env (Fst a1) (b, SOP.NP SOP.I (Snd a1)) -> (Score, SplitOn b a1)
 buildTree sf i def sfa@(SplitFunAux x y) =
-  (sum $ SOP.hcollapse $ SOP.hmap (\(SplitFunAuxAux z) -> SOP.K $ (fromIntegral (length z)*) $ entropy $ map (fst . snd) z) y,
+  (if (==1) $ length $ filter not $ SOP.hcollapse $ SOP.hmap (\(SplitFunAuxAux z) -> SOP.K $ null z) y then
+     Destructing else
+     Deciding $ sum $ SOP.hcollapse $ SOP.hmap (\(SplitFunAuxAux z) -> SOP.K $ (fromIntegral (length z)*) $ entropy $ map (fst . snd) z) y,
   SplitOn x (SOP.hcmap (fromSFA sfa) (\(SplitFunAuxAux z) -> if length z == 0 then SplitOnAux $ Leaf $ const def else
     let j = fst $ head z in
       SplitOnAux $ buildAux
