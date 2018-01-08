@@ -1,5 +1,5 @@
 name:                HappyTree
-version:             0.2018.1.7
+version:             0.2018.1.8
 github:              "MarisaKirisame/HappyTree"
 license:             BSD3
 author:              "Marisa Kirisame"
@@ -11,8 +11,8 @@ extra-source-files:
 - ChangeLog.md
 
 # Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
+synopsis:            Type Safe and End to End Decision Tree 
+category:            Data
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is

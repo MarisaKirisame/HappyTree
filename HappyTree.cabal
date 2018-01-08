@@ -2,11 +2,13 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3e0fd4eaa9d7a17303eb6384b1815869679ca40a5c786ee6a2a1d3217af91cca
+-- hash: d74aeccd0b857a91593a96a1aa5da8524af23a3d94b64dba31f696108f99b63b
 
 name:           HappyTree
-version:        0.2018.1.7
+version:        0.2018.1.8
+synopsis:       Type Safe and End to End Decision Tree
 description:    Please see the README on Github at <https://github.com/MarisaKirisame/HappyTree#readme>
+category:       Data
 homepage:       https://github.com/MarisaKirisame/HappyTree#readme
 bug-reports:    https://github.com/MarisaKirisame/HappyTree/issues
 author:         Marisa Kirisame
