@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8a83dd3398398752373163bc2904bfb643a36edcaa02323e902e5632931dfed3
+-- hash: 3e0fd4eaa9d7a17303eb6384b1815869679ca40a5c786ee6a2a1d3217af91cca
 
 name:           HappyTree
 version:        0.2018.1.7
@@ -33,6 +33,7 @@ library
       base >=4.7 && <5
     , constraints ==0.9.1
     , generics-sop ==0.3.1.0
+    , safe ==0.3.15
     , singletons ==2.3.1
   exposed-modules:
       Data.HappyTree
@@ -51,6 +52,7 @@ test-suite HappyTree-test
     , base >=4.7 && <5
     , constraints ==0.9.1
     , generics-sop ==0.3.1.0
+    , safe ==0.3.15
     , singletons ==2.3.1
   other-modules:
       Paths_HappyTree

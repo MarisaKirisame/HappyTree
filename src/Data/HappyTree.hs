@@ -25,6 +25,7 @@ import Data.Constraint
 import Data.List
 import Data.Ord
 import Data.Maybe
+import Safe
 
 $(singletons [d|
   revAppend :: [a] -> [a] -> [a]
@@ -113,6 +114,10 @@ instance {-# OVERLAPPING #-} GetIndex (l:r) l where
 newtype SplitFunAuxAux b d = SplitFunAuxAux { runSplitFunAuxAux :: [(SOP.NP SOP.I d, b)] }
 data SplitFunAux env a b = forall (c :: [[*]]) . (SOP.SListI2 c, SOP.All2 (GetIndex env) c) =>
   SplitFunAux (a -> SOP.SOP SOP.I c) (SOP.NP (SplitFunAuxAux b) c)
+
+unitSplitFunAux :: [b] -> SplitFunAux env a b
+unitSplitFunAux b = SplitFunAux (const $ SOP.SOP (SOP.Z SOP.Nil)) (SplitFunAuxAux (map (\x -> (SOP.Nil, x)) b) SOP.:* SOP.Nil)
+
 splitFunAuxP :: (SOP.SListI2 c, SOP.All2 (GetIndex env) c) => Proxy c -> (a -> SOP.SOP SOP.I c) -> SOP.NP (SplitFunAuxAux b) c -> SplitFunAux env a b
 splitFunAuxP _ = SplitFunAux
 
@@ -197,7 +202,7 @@ newtype WithScore b x = WithScore { runWithScore :: (Score, (SplitOn b x)) }
 buildTree :: (SOP.SListI env, Ord b) =>
   SplitFuns env env -> SOP.NP (Index env) (Snd a1) -> b -> SplitFunAux env (Fst a1) (b, SOP.NP SOP.I (Snd a1)) -> (Score, SplitOn b a1)
 buildTree sf i def sfa@(SplitFunAux x y) =
-  (if (==1) $ length $ filter not $ SOP.hcollapse $ SOP.hmap (\(SplitFunAuxAux z) -> SOP.K $ null z) y then
+  (if (<=1) $ length $ filter not $ SOP.hcollapse $ SOP.hmap (\(SplitFunAuxAux z) -> SOP.K $ null z) y then
      Destructing else
      Deciding $ sum $ SOP.hcollapse $ SOP.hmap (\(SplitFunAuxAux z) -> SOP.K $ (fromIntegral (length z)*) $ entropy $ map (fst . snd) z) y,
   SplitOn x (SOP.hcmap (fromSFA sfa) (\(SplitFunAuxAux z) -> if length z == 0 then SplitOnAux $ Leaf $ const def else
@@ -207,17 +212,17 @@ buildTree sf i def sfa@(SplitFunAux x y) =
 
 buildAux :: (SOP.SListI env, Ord b) => SOP.NP (Index env) a -> SplitFuns env env -> [(SOP.NP SOP.I a, b)] -> b -> DecisionTree a b
 buildAux _ sf [] def = Leaf $ const def
-buildAux i sf x@(xh:_) def =
-  case dictSList $ npToSList $ npSelElem $ fst $ xh of
+buildAux i sf x@((l, r):_) def =
+  case dictSList $ npToSList $ npSelElem $ l of
     Dict -> if length (group (map snd x)) == 1 then
-      Leaf $ const $ snd $ head x else
+      Leaf $ const $ r else
       let a = map (\(l, r) -> SOP.hmap (\(SelElemTypeAux a b) -> BuildAuxAux [(r, a, b)]) $ npSelElem l) x
           b = foldl (SOP.hzipWith (\(BuildAuxAux l) (BuildAuxAux r) -> BuildAuxAux (l ++ r))) (SOP.hpure (BuildAuxAux [])) a
       in
         fromMaybe (Leaf $ const def) $ fmap (Split . SOP.hmap (\(WithScore (_, t)) -> t)) $ nMinOn (\(WithScore (s, _)) -> s) $
           SOP.hzipWith
             (\(SelElemTypeAuxIndex c d) (BuildAuxAux e) ->
-              WithScore $ minimumBy (comparing fst) $
+              WithScore $ minimumByDef (buildTree sf d def $ unitSplitFunAux $ map (\(f, g, h) -> (f, h)) e) (comparing fst) $
                 map (buildTree sf d def) $
                   runSplitFun (fromIndex sf c) $
                     map (\(f, g, h) -> (g, (f, h))) e)
@@ -226,4 +231,4 @@ buildAux i sf x@(xh:_) def =
 
 build :: (SOP.All (GetIndex env) a, SOP.SListI env, Ord b) => SplitFuns env env -> [(SOP.NP SOP.I a, b)] -> b -> DecisionTree a b
 build sf [] def = Leaf $ const def
-build sf x@((np, _):_) def = buildAux (getIndex2 $ npToSList $ np) sf (sortBy (comparing snd) x) def
+build sf x@((np, _):_) _ = buildAux (getIndex2 $ npToSList $ np) sf (sortBy (comparing snd) x) (mode $ map snd x)
