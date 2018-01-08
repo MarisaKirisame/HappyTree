@@ -112,31 +112,31 @@ instance {-# OVERLAPPING #-} GetIndex (l:r) l where
   getIndex _ _ = Index $ SOP.Z IndexAux
 
 newtype SplitFunAuxAux b d = SplitFunAuxAux { runSplitFunAuxAux :: [(SOP.NP SOP.I d, b)] }
-data SplitFunAux env a b = forall (c :: [[*]]) . (SOP.SListI2 c, SOP.All2 (GetIndex env) c) =>
-  SplitFunAux (a -> SOP.SOP SOP.I c) (SOP.NP (SplitFunAuxAux b) c)
+data SplitFun env a b = forall (c :: [[*]]) . (SOP.SListI2 c, SOP.All2 (GetIndex env) c) =>
+  SplitFun (a -> SOP.SOP SOP.I c) (SOP.NP (SplitFunAuxAux b) c)
 
-unitSplitFunAux :: [b] -> SplitFunAux env a b
-unitSplitFunAux b = SplitFunAux (const $ SOP.SOP (SOP.Z SOP.Nil)) (SplitFunAuxAux (map (\x -> (SOP.Nil, x)) b) SOP.:* SOP.Nil)
+unitSplitFun :: [b] -> SplitFun env a b
+unitSplitFun b = SplitFun (const $ SOP.SOP (SOP.Z SOP.Nil)) (SplitFunAuxAux (map (\x -> (SOP.Nil, x)) b) SOP.:* SOP.Nil)
 
-splitFunAuxP :: (SOP.SListI2 c, SOP.All2 (GetIndex env) c) => Proxy c -> (a -> SOP.SOP SOP.I c) -> SOP.NP (SplitFunAuxAux b) c -> SplitFunAux env a b
-splitFunAuxP _ = SplitFunAux
+splitFunP :: (SOP.SListI2 c, SOP.All2 (GetIndex env) c) => Proxy c -> (a -> SOP.SOP SOP.I c) -> SOP.NP (SplitFunAuxAux b) c -> SplitFun env a b
+splitFunP _ = SplitFun
 
-data SplitFun (env :: [*]) a = SplitFun (forall b . [(a, b)] -> [SplitFunAux env a b])
-runSplitFun (SplitFun f) x = f x
+data SplitStrat (env :: [*]) a = SplitStrat (forall b . [(a, b)] -> [SplitFun env a b])
+runSplitFun (SplitStrat f) x = f x
 
-type SplitFuns cur env = SOP.NP (SplitFun env) cur
+type SplitStrats cur env = SOP.NP (SplitStrat env) cur
 
-instance Monoid (SplitFun env a) where
-  mempty = SplitFun (const [])
-  SplitFun l `mappend` SplitFun r = SplitFun (\b -> l b ++ r b)
+instance Monoid (SplitStrat env a) where
+  mempty = SplitStrat (const [])
+  SplitStrat l `mappend` SplitStrat r = SplitStrat (\b -> l b ++ r b)
 
-splitStaticAux :: SplitFun env a -> Proxy (GetIndex env)
+splitStaticAux :: SplitStrat env a -> Proxy (GetIndex env)
 splitStaticAux _ = Proxy
 
-splitStatic :: (SOP.SListI2 c, SOP.All2 (GetIndex env) c) => (a -> SOP.SOP SOP.I c) -> SplitFun env a
+splitStatic :: (SOP.SListI2 c, SOP.All2 (GetIndex env) c) => (a -> SOP.SOP SOP.I c) -> SplitStrat env a
 splitStatic split = res where
-  res = SplitFun $ \x ->
-    [SplitFunAux
+  res = SplitStrat $ \x ->
+    [SplitFun
       split
       (foldl join def $ map (\(a, b) -> SOP.hexpand (SplitFunAuxAux []) $ SOP.hmap (\c -> SplitFunAuxAux [(c, b)]) $ SOP.unSOP $ split a) x)]
   join :: SOP.SListI2 c => SOP.NP (SplitFunAuxAux b) c -> SOP.NP (SplitFunAuxAux b) c -> SOP.NP (SplitFunAuxAux b) c
@@ -144,9 +144,9 @@ splitStatic split = res where
   def :: SOP.SListI2 c => SOP.NP (SplitFunAuxAux b) c
   def = SOP.hpure $ SplitFunAuxAux []
 
-splitOrd :: (Ord a, GetIndex env a) => SplitFun env a
-splitOrd = SplitFun $
-  map (\(x, y, z) -> splitFunAuxP (Proxy :: Proxy ['[a], '[], '[a]])
+splitOrd :: (Ord a, GetIndex env a) => SplitStrat env a
+splitOrd = SplitStrat $
+  map (\(x, y, z) -> splitFunP (Proxy :: Proxy ['[a], '[], '[a]])
     (\a -> SOP.SOP $ case a `compare` fst (head y) of
       LT -> SOP.Z $ SOP.I a SOP.:* SOP.Nil
       EQ -> SOP.S $ SOP.Z SOP.Nil
@@ -156,7 +156,7 @@ splitOrd = SplitFun $
   where
     func (a, b) = (SOP.I a SOP.:* SOP.Nil, b)
 
-splitStructure :: (SOP.Generic a, SOP.SListI2 (SOP.Code a), SOP.All2 (GetIndex env) (SOP.Code a)) => SplitFun env a
+splitStructure :: (SOP.Generic a, SOP.SListI2 (SOP.Code a), SOP.All2 (GetIndex env) (SOP.Code a)) => SplitStrat env a
 splitStructure = splitStatic SOP.from
 
 getIndex2 :: SOP.All (GetIndex l) r => SOP.SList r -> SOP.NP (Index l) r
@@ -185,8 +185,8 @@ selElemTypeAuxIndex :: SOP.NP (Index env) a -> SOP.NP (Index env) b -> SOP.NP (S
 selElemTypeAuxIndex _ SOP.Nil = SOP.Nil
 selElemTypeAuxIndex x (y SOP.:* z) = SelElemTypeAuxIndex y (npRevAppend x z) SOP.:* selElemTypeAuxIndex (y SOP.:* x) z
 
-fromSFA :: SplitFunAux (env :: [*]) a b -> Proxy (SOP.All (GetIndex env))
-fromSFA _ = Proxy
+fromSF :: SplitFun (env :: [*]) a b -> Proxy (SOP.All (GetIndex env))
+fromSF _ = Proxy
 
 newtype BuildAuxAux a b = BuildAuxAux { runBuildAuxAux :: [(a, Fst b, SOP.NP SOP.I (Snd b))] }
 
@@ -200,17 +200,17 @@ instance Ord Score where
 newtype WithScore b x = WithScore { runWithScore :: (Score, (SplitOn b x)) }
 
 buildTree :: (SOP.SListI env, Ord b) =>
-  SplitFuns env env -> SOP.NP (Index env) (Snd a1) -> b -> SplitFunAux env (Fst a1) (b, SOP.NP SOP.I (Snd a1)) -> (Score, SplitOn b a1)
-buildTree sf i def sfa@(SplitFunAux x y) =
+  SplitStrats env env -> SOP.NP (Index env) (Snd a1) -> b -> SplitFun env (Fst a1) (b, SOP.NP SOP.I (Snd a1)) -> (Score, SplitOn b a1)
+buildTree sf i def sfa@(SplitFun x y) =
   (if (<=1) $ length $ filter not $ SOP.hcollapse $ SOP.hmap (\(SplitFunAuxAux z) -> SOP.K $ null z) y then
      Destructing else
      Deciding $ sum $ SOP.hcollapse $ SOP.hmap (\(SplitFunAuxAux z) -> SOP.K $ (fromIntegral (length z)*) $ entropy $ map (fst . snd) z) y,
-  SplitOn x (SOP.hcmap (fromSFA sfa) (\(SplitFunAuxAux z) -> if length z == 0 then SplitOnAux $ Leaf $ const def else
+  SplitOn x (SOP.hcmap (fromSF sfa) (\(SplitFunAuxAux z) -> if length z == 0 then SplitOnAux $ Leaf $ const def else
     let j = fst $ head z in
       SplitOnAux $ buildAux
         (getIndex2 (npToSList j) `npAppend` i) sf (map (\(c, (d, e)) -> (c `npAppend` e, d)) z) (mode $ map (fst . snd) z)) y))
 
-buildAux :: (SOP.SListI env, Ord b) => SOP.NP (Index env) a -> SplitFuns env env -> [(SOP.NP SOP.I a, b)] -> b -> DecisionTree a b
+buildAux :: (SOP.SListI env, Ord b) => SOP.NP (Index env) a -> SplitStrats env env -> [(SOP.NP SOP.I a, b)] -> b -> DecisionTree a b
 buildAux _ sf [] def = Leaf $ const def
 buildAux i sf x@((l, r):_) def =
   case dictSList $ npToSList $ npSelElem $ l of
@@ -222,13 +222,13 @@ buildAux i sf x@((l, r):_) def =
         fromMaybe (Leaf $ const def) $ fmap (Split . SOP.hmap (\(WithScore (_, t)) -> t)) $ nMinOn (\(WithScore (s, _)) -> s) $
           SOP.hzipWith
             (\(SelElemTypeAuxIndex c d) (BuildAuxAux e) ->
-              WithScore $ minimumByDef (buildTree sf d def $ unitSplitFunAux $ map (\(f, g, h) -> (f, h)) e) (comparing fst) $
+              WithScore $ minimumByDef (buildTree sf d def $ unitSplitFun $ map (\(f, g, h) -> (f, h)) e) (comparing fst) $
                 map (buildTree sf d def) $
                   runSplitFun (fromIndex sf c) $
                     map (\(f, g, h) -> (g, (f, h))) e)
             (selElemTypeAuxIndex SOP.Nil i)
             b
 
-build :: (SOP.All (GetIndex env) a, SOP.SListI env, Ord b) => SplitFuns env env -> [(SOP.NP SOP.I a, b)] -> b -> DecisionTree a b
+build :: (SOP.All (GetIndex env) a, SOP.SListI env, Ord b) => SplitStrats env env -> [(SOP.NP SOP.I a, b)] -> b -> DecisionTree a b
 build sf [] def = Leaf $ const def
 build sf x@((np, _):_) _ = buildAux (getIndex2 $ npToSList $ np) sf (sortBy (comparing snd) x) (mode $ map snd x)
