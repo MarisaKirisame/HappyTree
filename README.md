@@ -12,6 +12,8 @@ Want to use different split strategy at the same time, splitting on the finest c
 
 ## Known Problem
 
+Might never return if you insert infinite list or other infinite data.
+
 Can only split on finitely many type now. Cannot split on
 
 data Perfect a = Here a | More (Perfect (a, a)).
