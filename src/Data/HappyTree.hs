@@ -160,6 +160,9 @@ splitOrd = SplitStrat $
 splitStructure :: (Generic a, SListI2 (Code a), All2 (GetIndex env) (Code a)) => SplitStrat env a
 splitStructure = splitStatic from
 
+splitStructureP :: (Generic a, SListI2 (Code a), All2 (GetIndex env) (Code a)) => Proxy a -> SplitStrat env a
+splitStructureP _ = splitStatic from
+
 getIndex2 :: SOP.All (GetIndex l) r => SOP.SList r -> NP (Index l) r
 getIndex2 SOP.SNil = Nil
 getIndex2 SOP.SCons = getIndex Proxy Proxy :* getIndex2 SOP.sList

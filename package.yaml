@@ -25,11 +25,13 @@ dependencies:
 - generics-sop == 0.3.1.0
 - constraints == 0.9.1
 - safe == 0.3.15
+- criterion == 1.2.6.0
 
 library:
   source-dirs: src
   ghc-options:
     - -Wno-partial-type-signatures
+    - -O
 
 tests:
   HappyTree-test:
@@ -41,3 +43,12 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - HappyTree
+
+executables:
+  HappyTreeSample:
+    main: Sample.hs
+    source-dirs: samples
+    dependencies:
+    - HappyTree
+    ghc-options:
+      - -O
