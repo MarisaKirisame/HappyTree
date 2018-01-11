@@ -15,5 +15,5 @@ sampleData :: [([Bool], Bool)]
 sampleData = genSample 12
 
 main = do
-  let tree = build (splitStructureP (Proxy :: Proxy Bool) :* splitStructureP (Proxy :: Proxy [Bool]) :* Nil) (map (\(l, r) -> (I l :* Nil, r)) sampleData) True
-  print $ eval tree (I (repeat True) :* Nil)
+  let tree = build DefSplitStrat sampleData True
+  print $ eval tree (repeat True)
