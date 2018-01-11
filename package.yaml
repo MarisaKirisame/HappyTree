@@ -21,11 +21,12 @@ description:         Please see the README on Github at <https://github.com/Mari
 
 dependencies:
 - base >= 4.7 && < 5
-- singletons == 2.3.1
-- generics-sop == 0.3.1.0
-- constraints == 0.9.1
-- safe == 0.3.15
-- criterion == 1.2.6.0
+- singletons >= 2.3.1
+- generics-sop >= 0.3.1.0
+- constraints >= 0.9.1
+- safe >= 0.3.15
+- criterion >= 1.2.6.0
+- Get >= 0.2018.1.10
 
 library:
   source-dirs: src

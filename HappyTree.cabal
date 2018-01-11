@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b1ca1af4a4bf78e303177b6f51c28a9a09affa53b2ca54fd046ae91c8f86c1d4
+-- hash: a36d486e82d37a145968db09e1ef49ad8fbd6301ea832b52799662750f6bb7c1
 
 name:           HappyTree
 version:        0.2018.1.8
@@ -32,12 +32,13 @@ library
       src
   ghc-options: -Wno-partial-type-signatures -O
   build-depends:
-      base >=4.7 && <5
-    , constraints ==0.9.1
-    , criterion ==1.2.6.0
-    , generics-sop ==0.3.1.0
-    , safe ==0.3.15
-    , singletons ==2.3.1
+      Get >=0.2018.1.10
+    , base >=4.7 && <5
+    , constraints >=0.9.1
+    , criterion >=1.2.6.0
+    , generics-sop >=0.3.1.0
+    , safe >=0.3.15
+    , singletons >=2.3.1
   exposed-modules:
       Data.HappyTree
   other-modules:
@@ -50,13 +51,14 @@ executable HappyTreeSample
       samples
   ghc-options: -O
   build-depends:
-      HappyTree
+      Get >=0.2018.1.10
+    , HappyTree
     , base >=4.7 && <5
-    , constraints ==0.9.1
-    , criterion ==1.2.6.0
-    , generics-sop ==0.3.1.0
-    , safe ==0.3.15
-    , singletons ==2.3.1
+    , constraints >=0.9.1
+    , criterion >=1.2.6.0
+    , generics-sop >=0.3.1.0
+    , safe >=0.3.15
+    , singletons >=2.3.1
   other-modules:
       Paths_HappyTree
   default-language: Haskell2010
@@ -68,13 +70,14 @@ test-suite HappyTree-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      HappyTree
+      Get >=0.2018.1.10
+    , HappyTree
     , base >=4.7 && <5
-    , constraints ==0.9.1
-    , criterion ==1.2.6.0
-    , generics-sop ==0.3.1.0
-    , safe ==0.3.15
-    , singletons ==2.3.1
+    , constraints >=0.9.1
+    , criterion >=1.2.6.0
+    , generics-sop >=0.3.1.0
+    , safe >=0.3.15
+    , singletons >=2.3.1
   other-modules:
       Paths_HappyTree
   default-language: Haskell2010
