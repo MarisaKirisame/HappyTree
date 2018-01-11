@@ -161,49 +161,45 @@ popSplitStratAux SOP.SCons env = npSplitStrat env :* popSplitStratAux SOP.sList 
 popSplitStrat :: All2 (GetSplitStrat env) c => env -> POP SplitStrat c
 popSplitStrat = POP . popSplitStratAux SOP.sList
 
-splitStatic :: (SListI2 c, All2 (GetSplitStrat env) c) => env -> (a -> SOP I c) -> SplitStrat a
-splitStatic env split = res where
+splitStatic :: SListI2 c => POP SplitStrat c -> (a -> SOP I c) -> SplitStrat a
+splitStatic strat split = res where
   res = SplitStrat $ \x ->
     [SplitFun
       split
       (foldl join def $ map (\(a, b) -> hexpand (Comp []) $ hmap (\c -> Comp [Comp $ (b, c)]) $ unSOP $ split a) x)
-      (popSplitStrat env)]
+      strat]
   join :: SListI2 c => NP ([] :.: (,) b :.: NP I) c -> NP ([] :.: (,) b :.: NP I) c -> NP ([] :.: (,) b :.: NP I) c
   join = hzipWith (\(Comp l) (Comp r) -> Comp (l ++ r))
   def :: SListI2 c => NP ([] :.: (,) b :.: NP I) c
   def = hpure $ Comp []
 
-splitStructure :: (Generic a, SListI2 (Code a), All2 (GetSplitStrat env) (Code a)) => env -> SplitStrat a
-splitStructure env = splitStatic env from
+splitStructure :: (Generic a, SListI2 (Code a)) => POP SplitStrat (Code a) -> SplitStrat a
+splitStructure strat = splitStatic strat from
 
-splitStructureP :: (Generic a, SListI2 (Code a), All2 (GetSplitStrat env) (Code a)) => env -> Proxy a -> SplitStrat a
-splitStructureP env _ = splitStructure env
+splitStructureP :: (Generic a, SListI2 (Code a)) => POP SplitStrat (Code a) -> Proxy a -> SplitStrat a
+splitStructureP strat _ = splitStructure strat
 
-splitOrd :: (Ord a, GetSplitStrat env a) => env -> SplitStrat a
-splitOrd env = SplitStrat $
-  map (\(x, y, z) -> splitFunP (Proxy :: Proxy ['[a], '[], '[a]])
+splitOrd :: Ord a => POP SplitStrat ['[a], '[], '[a]] -> SplitStrat a
+splitOrd strat = SplitStrat $
+  map (\(x, y, z) -> SplitFun
     (\a -> SOP $ case a `compare` fst (head y) of
       LT -> Z $ I a :* Nil
       EQ -> S $ Z Nil
       GT -> S $ S $ Z $ I a :* Nil)
     (Comp (map func $ concat x) :* Comp (map (\(_, b) -> Comp $ (b, Nil)) y) :* Comp (map func $ concat z) :* Nil)
-    (popSplitStrat env)) .
+    strat) .
   takeElem . groupBy (\(l, _) (r, _) -> l == r) . sortBy (comparing fst)
   where
     func (a, b) = Comp $ (b, (I a :* Nil))
 
-newtype WithScore b x = WithScore { runWithScore :: (Score, (SplitOn b x)) }
-{-
 buildTree :: Ord b => NP SplitStrat (Snd a1) -> b -> SplitFun (Fst a1) (b, NP I (Snd a1)) -> (Score, SplitOn b a1)
-buildTree strat def sfa@(SplitFun a b c) =
+buildTree strat def sfa@(SplitFun a b (POP c)) =
   (if (<=1) $ length $ filter not $ hcollapse $ hmap (\(Comp z) -> K $ null z) b then
      Destructing else
-     Deciding $ sum $ hcollapse $ hmap (\(Comp z) -> K $ (fromIntegral (length z) *) $ entropy $ map _ z) b,
-  SplitOn a (hcmap (fromSF sfa) (\(Comp z) ->
-    case z of
-      [] -> SplitOnAux $ Leaf $ const def
-      ((j, _):_) -> SplitOnAux $ buildAux
-        (getGetter (npToSList j) `npAppend` strat) (map (\(c, (d, e)) -> (c `npAppend` e, d)) (sortBy (comparing $ fst . snd) z)) (mode $ map (fst . snd) z)) b))
+     Deciding $ sum $ hcollapse $ hmap (\(Comp z) -> K $ (fromIntegral (length z) *) $ entropy $ map (\(Comp ((x, _), _)) -> x) z) b,
+  SplitOn a (hzipWith (\(Comp z) aStrat -> case sortBy (comparing $ fst . fst) $ map unComp z of
+    [] -> SplitOnAux $ Leaf $ const def
+    z -> SplitOnAux $ buildAux (aStrat `npAppend` strat) (map (\((c, d), e) -> (e `npAppend` d, c)) z) (mode $ map (fst . fst) z)) b c))
 
 newtype BuildAuxAux a b = BuildAuxAux { runBuildAuxAux :: [(a, Fst b, NP I (Snd b))] }
 
@@ -211,6 +207,8 @@ data SelElemTypeAuxStrat env a = SelElemTypeAuxStrat (SplitStrat (Fst a)) (NP Sp
 selElemTypeAuxStrat :: NP SplitStrat a -> NP SplitStrat b -> NP (SelElemTypeAuxStrat env) (SelElemAux a b)
 selElemTypeAuxStrat _ Nil = Nil
 selElemTypeAuxStrat x (y :* z) = SelElemTypeAuxStrat y (npRevAppend x z) :* selElemTypeAuxStrat (y :* x) z
+
+newtype WithScore b x = WithScore { runWithScore :: (Score, (SplitOn b x)) }
 
 buildAux :: Ord b => NP SplitStrat a -> [(NP I a, b)] -> b -> DecisionTree a b
 buildAux strat [] def = Leaf $ const def
@@ -225,58 +223,32 @@ buildAux strat x@((l, r):_) def =
           hzipWith
             (\(SelElemTypeAuxStrat c d) (BuildAuxAux e) ->
               Comp $ fmap WithScore $ minimumByMay (comparing fst) $
-                map (buildTree env d def) $
-                  runSplitStrat (unComp c env) $
+                map (buildTree d def) $
+                  runSplitStrat c $
                     map (\(f, g, h) -> (g, (f, h))) e)
-            (selElemTypeAuxStrat Nil getter)
-            b-}
-
-fromSF :: SplitFun a b -> Proxy (SOP.All (GetSplitStrat a))
-fromSF _ = Proxy
-
-{- --todo
-
-getGetter :: SOP.All (GetSplitStrat env) x => SOP.SList x -> NP (((->) env) :.: SplitStrat) x
-getGetter SOP.SNil = Nil
-getGetter SOP.SCons = Comp get :* getGetter SOP.sList
-
-buildTree :: Ord b => env -> NP SplitStrat (Snd a1) -> b -> SplitFun (Fst a1) (b, NP I (Snd a1)) -> (Score, SplitOn b a1)
-buildTree env getter def sfa@(SplitFun x y) =
-  (if (<=1) $ length $ filter not $ hcollapse $ hmap (\(SplitFunAux z) -> K $ null z) y then
-     Destructing else
-     Deciding $ sum $ hcollapse $ hmap (\(SplitFunAux z) -> K $ (fromIntegral (length z)*) $ entropy $ map (fst . snd) z) y,
-  SplitOn x (hcmap (fromSF sfa) (\(SplitFunAux z) ->
-    case z of
-      [] -> SplitOnAux $ Leaf $ const def
-      ((j, _):_) -> SplitOnAux $ buildAux env
-        (getGetter (npToSList j) `npAppend` getter) (map (\(c, (d, e)) -> (c `npAppend` e, d)) (sortBy (comparing $ fst . snd) z)) (mode $ map (fst . snd) z)) y))
-
-buildAux :: Ord b => env -> NP SplitStrat a -> [(NP I a, b)] -> b -> DecisionTree a b
-buildAux env getter [] def = Leaf $ const def
-buildAux env getter x@((l, r):_) def =
-  case dictSList $ npToSList $ npSelElem $ l of
-    Dict -> if length (group (map snd x)) == 1 then
-      Leaf $ const $ r else
-      let a = map (\(l, r) -> hmap (\(SelElemTypeAux a b) -> BuildAuxAux [(r, a, b)]) $ npSelElem l) x
-          b = foldl (hzipWith (\(BuildAuxAux l) (BuildAuxAux r) -> BuildAuxAux (l ++ r))) (hpure (BuildAuxAux [])) a
-      in
-        fromMaybe (Leaf $ const def) $ join $ fmap (fmap (Split . hmap (\(WithScore (_, t)) -> t)) . nMinOn (\(WithScore (s, _)) -> s)) $ hsequence' $
-          hzipWith
-            (\(SelElemTypeAuxGetter c d) (BuildAuxAux e) ->
-              Comp $ fmap WithScore $ minimumByMay (comparing fst) $
-                map (buildTree env d def) $
-                  runSplitStrat (unComp c env) $
-                    map (\(f, g, h) -> (g, (f, h))) e)
-            (selElemTypeAuxGetter Nil getter)
+            (selElemTypeAuxStrat Nil strat)
             b
 
-instance TryGet (SplitStrat [a]) DefSplitStrat self True where
-  tryGetVal self from p = undefined
-  tryGetSing _ _ p = undefined
+splitStratP :: Proxy a -> Proxy (SplitStrat a)
+splitStratP _ = Proxy
+unSplitStratP :: Proxy (SplitStrat a) -> Proxy a
+unSplitStratP _ = Proxy
+unListP :: Proxy [a] -> Proxy a
+unListP _ = Proxy
+
+instance TryGet (SplitStrat a) self self ok => TryGet (SplitStrat [a]) DefSplitStrat self ok where
+  tryGetVal self _ p = let (v, s) = tryGet self self (splitStratP $ unListP $ unSplitStratP p) in
+    case s of
+      STrue -> let res = splitStatic (POP (Nil :* (v :* res :* Nil) :* Nil)) from in res
+      SFalse -> ()
+  tryGetSing self _ p = tryGetSing self self (splitStratP $ unListP $ unSplitStratP p)
+
+instance TryGet (SplitStrat Bool) DefSplitStrat self True where
+  tryGetVal self _ _ = splitStructure (popSplitStrat self)
+  tryGetSing _ _ _ = STrue
 
 data DefSplitStrat = DefSplitStrat
 
 build :: (GetSplitStrat env a, Ord b) => env -> [(a, b)] -> b -> DecisionTree '[a] b
 build env [] def = Leaf $ const def
-build env x@((np, _):_) _ = buildAux env (Comp get :* Nil) (map (\(l, r) -> (I l :* Nil, r)) $ sortBy (comparing snd) x) (mode $ map snd x)
--}
+build env x@((np, _):_) _ = buildAux (get env :* Nil) (map (\(l, r) -> (I l :* Nil, r)) $ sortBy (comparing snd) x) (mode $ map snd x)
