@@ -236,12 +236,15 @@ unSplitStratP _ = Proxy
 unListP :: Proxy [a] -> Proxy a
 unListP _ = Proxy
 
-instance TryGet (SplitStrat a) self self ok => TryGet (SplitStrat [a]) DefSplitStrat self ok where
-  tryGetVal self _ p = let (v, s) = tryGet self self (splitStratP $ unListP $ unSplitStratP p) in
+andP :: Proxy a -> Proxy b -> Proxy (Control.Get.And a b)
+andP _ _ = Proxy
+
+instance (TryGet (Control.Get.And (SplitStrat a) (SplitStrat [a])) self self ok) => TryGet (SplitStrat [a]) DefSplitStrat self ok where
+  tryGetVal self _ p = let (v, s) = tryGet self self (andP (splitStratP $ unListP $ unSplitStratP p) p) in
     case s of
-      STrue -> let res = splitStatic (POP (Nil :* (v :* res :* Nil) :* Nil)) from in res
+      STrue -> case v of Control.Get.And a as -> splitStatic (POP (Nil :* (a :* as :* Nil) :* Nil)) from
       SFalse -> ()
-  tryGetSing self _ p = tryGetSing self self (splitStratP $ unListP $ unSplitStratP p)
+  tryGetSing self _ p = tryGetSing self self (andP (splitStratP $ unListP $ unSplitStratP p) p)
 
 instance TryGet (SplitStrat Bool) DefSplitStrat self True where
   tryGetVal self _ _ = splitStructure (popSplitStrat self)
@@ -252,3 +255,6 @@ data DefSplitStrat = DefSplitStrat
 build :: (GetSplitStrat env a, Ord b) => env -> [(a, b)] -> b -> DecisionTree '[a] b
 build env [] def = Leaf $ const def
 build env x@((np, _):_) _ = buildAux (get env :* Nil) (map (\(l, r) -> (I l :* Nil, r)) $ sortBy (comparing snd) x) (mode $ map snd x)
+
+predict :: (GetSplitStrat env a, Ord b) => env -> [(a, b)] -> b -> (a -> b)
+predict env x def = eval $ build env x def
